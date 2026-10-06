@@ -29,6 +29,8 @@ Experimental GP107 support is suspended because end users still report Code 10. 
 
 HBR3 support does not imply full DP 1.4 DSC/HDR/MST support.
 
+With a DisplayPort 1.3/1.4 monitor, some Maxwell and Pascal cards show a blank screen or hang at boot until the operating system loads. This comes from the card's firmware, not the driver; NVIDIA provides a [graphics firmware update](https://nvidia.custhelp.com/app/answers/detail/a_id/4674/~/graphics-firmware-update-for-displayport-1.3-and-1.4-displays) for affected GeForce 700/900/10 series, TITAN and Quadro boards.
+
 The 10-5-2026 build adds the CUDA/OpenCL/GPU PhysX correction and consistent display build dates, and removes GP107 display INF entries.
 
 [Download the installer](https://github.com/SupraGSX/Forceware-382.69/releases/latest)
