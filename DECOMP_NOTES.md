@@ -112,6 +112,23 @@ XP: ACR 0-5 descriptors at `0xc33f90 + 0x18*i`, getters `0x4d3e10..0x4d3eb0`, re
 | ACR 376.84 (upstream) | halts immediately, MAILBOX0 `0x23` |
 | ACR 382.33 set | runs about 57 polls, MAILBOX0 `0x0b` |
 
+## Public ACR status codes (nvgpu)
+
+NVIDIA's open-source Tegra driver **nvgpu** (MIT licensed; mirror `github.com/OE4T/linux-nvgpu`, commit `21d928824dc7`, `drivers/gpu/nvgpu/common/acr/acr_priv.h`) lists the status codes the ACR firmware returns in MAILBOX0:
+
+| Code | Name |
+|---|---|
+| `0x0B` | `ACR_ERROR_LS_SIG_VERIF_FAIL`: signature verification of an LS (light-secure) falcon image failed |
+| `0x1B` | `ACR_ERROR_REG_ACCESS_FAILURE` |
+| `0x66` | `ACR_ERROR_WDT` (watchdog) |
+| `0x84` | `ACR_ERROR_RISCV_EXCEPTION` (RISC-V ACR only) |
+
+`acr_bootstrap.c` reads **MAILBOX1** on failure to get the falcon ID of the image that failed. IDs from `include/nvgpu/falcon.h`: PMU 0, GSPLITE 1, FECS 2, GPCCS 3, NVDEC 4, SEC2 7, MINION 10, PMU_NEXT_CORE 13.
+
+Caveats: nvgpu documents these alongside its newer (GSP/RISC-V) ACR. The ACR codebase is shared across generations and `0x0B` fits our observation, but the mapping for the 2017 desktop Pascal ACR is not independently confirmed. `0x23` is not listed in nvgpu; upstream's reading (fused minimum version not met) comes from their disassembly of the ACR (REBUILDING.md §5.1).
+
+**Applied to GP108 p3:** MAILBOX0 `0x0B` means the 382.33 ACR passed its own checks and then **rejected the signature of one of the LS images** in the WPR. The XP driver reads and clears only MAILBOX0 and never reads MAILBOX1 (`0x87044`; no access in either trace), so which image failed (FECS, GPCCS, SEC2 or PMU) is not yet known. This fits the mixed-release hypothesis: the SEC2 LS image and signature are from 376.84 while the ACR is from 382.33.
+
 ## Status (2026-10-05)
 
 - **Graphics path (FECS/GPCCS/GR) is mapped** and mirrored in the `sources/gp108` prototype using NVIDIA-signed 382.33 resources, unmodified.
