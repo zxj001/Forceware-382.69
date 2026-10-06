@@ -1,0 +1,48 @@
+REGISTRATION - GP108 FAMILY TABLE
+=================================
+
+Status: DONE (prototype)
+
+1. PURPOSE
+
+1.1 The driver keeps one chip table for each GPU family.
+1.2 The chip table holds 82 constructor addresses.
+1.3 Each constructor sets up one engine for that family.
+1.4 The driver must register a GP108 table before it starts the GT 1030.
+
+2. STARTING CONDITION
+
+2.1 The XP miniport already identifies the GT 1030 chip as GP108.
+2.2 The miniport maps PCI IDs 0x1D00 to 0x1D3F to chip 0x138.
+2.3 The miniport does not register a GP108 family table.
+2.4 This is the difference from the other Pascal cards. The others have a
+    registered family table.
+
+3. DONOR REFERENCE
+
+3.1 The donor registers GP108 as family key 0x3D.
+3.2 The donor keys are one higher than the XP keys.
+3.3 The XP GP107 key is 0x3B. The XP GP108 key is 0x3C.
+3.4 The donor GP108 table is built from the GP107 table.
+3.5 The donor changes 12 of the 82 slots for GP108.
+
+4. PROTOTYPE
+
+4.1 sources/gp108/gp108.s adds the GP108 registration.
+4.2 The code runs after the GP107 registration.
+4.3 The code copies the GP107 table into a new GP108 table.
+4.4 The code overrides the firmware slots: FECS, GPCCS, and GR.
+4.5 The code registers the table with key 0x3C.
+4.6 The code uses EIP-relative addresses only.
+4.7 The code adds no new PE relocations.
+
+5. OPEN POINTS
+
+5.1 Nine capability slots are not yet mirrored. See CAPABILITY-SLOTS.txt.
+5.2 The prototype shares the ACR object selection with other Pascal GPUs.
+    Restrict this to GP108 before release. See ACR.txt.
+
+6. REFERENCES
+
+6.1 DECOMP_NOTES.md, section "Family keys".
+6.2 sources/gp108/gp108.s and sources/gp108/gp108.ld.
