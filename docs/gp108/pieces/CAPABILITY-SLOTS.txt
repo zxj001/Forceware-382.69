@@ -13,7 +13,9 @@ Status: OPEN
 
    Slot  Subject                       Note
    4     Bus initialization            Drops a Quadro P400 quirk.
-   5     Memory-subsystem registers    Writes 0x10402C and 0x104034.
+   5     Memory-subsystem registers    Same base as GP107; adds one
+                                       method that writes 0x10402C
+                                       and 0x104034.
    6     Capability bytes              Sets fields at +0x74.
    8     Capability bytes              Sets fields at +0x6F8 to +0x720.
    15    Per-config paths + bytes      Selects paths; sets +0x732 fields.

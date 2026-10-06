@@ -1,7 +1,7 @@
 GPU-NAMES - INTERNAL NAME RECORDS FOR COMPUTE
 =============================================
 
-Status: OPEN
+Status: DONE (no change needed)
 
 1. PURPOSE
 
@@ -17,9 +17,9 @@ Status: OPEN
 
 3. GP108 WORK
 
-3.1 Check whether the name table holds a GT 1030 record.
-3.2 Add a record where a verified lookup path needs one.
-3.3 Do this only if compute support is in scope for the release.
+3.1 The stock 368.81 name table already holds a GT 1030 (1D01) record.
+3.2 No new record is necessary.
+3.3 Test compute features after the card starts, if they are in scope.
 3.4 Display output and rendering do not depend on this piece.
 
 4. SEQUENCE

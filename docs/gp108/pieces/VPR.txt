@@ -29,4 +29,4 @@ Status: DONE
 5. REFERENCES
 
 5.1 REBUILDING.md, section 5.2, for the standard VPR set.
-5.2 NOTES.md, firmware-consistency findings.
+5.2 DECOMP_NOTES.md, status section.
