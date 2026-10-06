@@ -1,0 +1,40 @@
+WPR - PROTECTED MEMORY REGION LAYOUT
+====================================
+
+Status: PARTIAL
+
+1. PURPOSE
+
+1.1 WPR is a protected memory area used during firmware startup.
+1.2 The driver places firmware images and headers in the WPR.
+1.3 ACR reads the WPR to check and start each image. See ACR.txt.
+
+2. CONTENT
+
+2.1 The WPR holds a region header.
+2.2 The WPR holds one header for each light-secure processor.
+2.3 The WPR holds each firmware image and its signature.
+
+3. CURRENT STATE
+
+3.1 The XP driver builds the WPR for the standard Pascal cards.
+3.2 The XP header sizes match the donor header sizes.
+3.3 The WPR structure is the same between the two drivers in the sizes
+    checked so far.
+
+4. OPEN POINTS
+
+4.1 Confirm the WPR field values for a GP108 image set.
+4.2 Confirm the image alignment and the placement order.
+4.3 Confirm that the headers reference the correct GP108 signatures.
+4.4 A wrong WPR field can cause the ACR signature failure. See ACR.txt.
+
+5. SCOPE NOTE
+
+5.1 The detailed WPR verification path was not fully analyzed. Analysis
+    stopped at the secure-boot boundary.
+
+6. REFERENCES
+
+6.1 DECOMP_NOTES.md, status section.
+6.2 ACR.txt and SEC2.txt in this folder.

@@ -1,0 +1,52 @@
+SEC2 - SEC2 PROCESSOR FIRMWARE SET
+==================================
+
+Status: PARTIAL
+
+1. PURPOSE
+
+1.1 SEC2 is a security processor inside the GPU.
+1.2 SEC2 runs the ACR code during authenticated startup. See ACR.txt.
+1.3 The later SEC2 firmware helps start FECS and GPCCS.
+
+2. RESOURCE SET
+
+2.1 A SEC2 set has three parts.
+2.2 The image holds the program instructions and data.
+2.3 The descriptor holds information to load the image.
+2.4 The signature holds data for authenticated startup.
+
+3. CURRENT STATE
+
+3.1 The standard backport uses the 376.84 SEC2 set.
+3.2 The standard combination is ACR 376.84, VPR 378.78, SEC2 376.84.
+3.3 This combination passed the GTX 1080 Ti tests. That card uses GP102.
+3.4 The p3 build keeps the 376.84 SEC2 set with the 382.33 ACR.
+
+4. THE MIXED-RELEASE PROBLEM
+
+4.1 The 376.84 SEC2 image is older than the GT 1030.
+4.2 The 376.84 SEC2 image does not appear in the 382.33 donor.
+4.3 The 382.33 ACR and the 376.84 SEC2 form a combination that NVIDIA
+    never shipped.
+4.4 This combination is the leading explanation for ACR status 0x0B.
+
+5. REQUIRED WORK
+
+5.1 Find the SEC2 set that the 382.33 donor uses.
+5.2 Read the image, descriptor, and signature from the donor.
+5.3 Keep the image and signature from the same release.
+5.4 Do not change the firmware instructions or the signatures.
+5.5 Check the boot descriptor adapter against the new set. See BOOTDESC.txt.
+5.6 Record every extracted resource hash.
+
+6. SCOPE NOTE
+
+6.1 The SEC2 selection path was not fully analyzed. Analysis was stopped
+    at the secure-boot boundary. See ACR.txt, section 6.
+
+7. REFERENCES
+
+7.1 DECOMP_NOTES.md, status section.
+7.2 REBUILDING.md, section 5.3, for the standard SEC2 tuple.
+7.3 sources/sec2-bootdesc.S for the host-side descriptor adapter.

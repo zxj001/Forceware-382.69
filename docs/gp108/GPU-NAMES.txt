@@ -1,0 +1,34 @@
+GPU-NAMES - INTERNAL NAME RECORDS FOR COMPUTE
+=============================================
+
+Status: OPEN
+
+1. PURPOSE
+
+1.1 Some GPU features use an internal name table.
+1.2 The table maps a chip to a name record.
+1.3 CUDA, OpenCL, and GPU PhysX use these records.
+
+2. BACKGROUND
+
+2.1 The standard backport corrected missing name records for GP102.
+2.2 Those records let CUDA, OpenCL, and PhysX find the GPU.
+2.3 The correction is described in the standard documentation.
+
+3. GP108 WORK
+
+3.1 Check whether the name table holds a GT 1030 record.
+3.2 Add a record where a verified lookup path needs one.
+3.3 Do this only if compute support is in scope for the release.
+3.4 Display output and rendering do not depend on this piece.
+
+4. SEQUENCE
+
+4.1 This piece is not required for the current failure.
+4.2 Start this piece after the card starts and renders.
+
+5. REFERENCES
+
+5.1 sources/gpu-names.py for the name-table generator.
+5.2 compute-gpus.json for the compute device list.
+5.3 REBUILDING.md, section 9a, for the standard name correction.

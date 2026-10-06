@@ -1,0 +1,49 @@
+BUILD - REPRODUCIBLE BUILD INTEGRATION
+======================================
+
+Status: OPEN
+
+1. PURPOSE
+
+1.1 The build recipe must produce the GP108 driver from clean inputs.
+1.2 Another person must be able to repeat the build.
+1.3 The build must not store NVIDIA firmware in this repository.
+
+2. CURRENT STATE
+
+2.1 The GP108 changes use a standalone patcher.
+2.2 The patcher is sources/gp108/patch_gp108.py.
+2.3 The patcher reads firmware from the 382.33 donor at patch time.
+2.4 The main builder, rebuild.py, does not apply the patcher.
+2.5 The main builder accepts two firmware donors today.
+
+3. REQUIRED WORK
+
+3.1 Add the 382.33 donor as a third firmware donor input.
+3.2 Add its pinned SHA-256 to patches.json.
+3.3 Add an extraction record and a decoded hash for each new resource.
+3.4 Add guarded binary patch records for each new change.
+3.5 Add GP108 source verification to verify_sources.py.
+3.6 Update the installer templates that change.
+3.7 Update the package hashes and the file inventory.
+3.8 Update the build identification fields and the build date.
+3.9 Build from clean inputs without a previously patched miniport.
+3.10 Verify the extracted package contents.
+
+4. GUARD RULES
+
+4.1 The builder checks every input hash.
+4.2 The builder checks the original bytes at each patch location.
+4.3 The builder checks the output hashes.
+4.4 Keep these checks for the GP108 changes.
+
+5. SCOPE NOTE
+
+5.1 Do this piece after a candidate passes the hardware startup test.
+5.2 Do not integrate an unverified change into the main builder.
+
+6. REFERENCES
+
+6.1 rebuild.py and patches.json.
+6.2 verify_sources.py.
+6.3 REBUILDING.md, section 2, for the build instructions.

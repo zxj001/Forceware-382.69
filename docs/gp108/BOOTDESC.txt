@@ -1,0 +1,44 @@
+BOOTDESC - SEC2 BOOT DESCRIPTOR ADAPTER
+=======================================
+
+Status: PARTIAL
+
+1. PURPOSE
+
+1.1 The boot descriptor tells the SEC2 bootloader where to find code and
+    data.
+1.2 The host builds this descriptor before startup.
+1.3 The descriptor field positions must match the selected bootloader.
+
+2. BOOT DESCRIPTOR VS RESOURCE DESCRIPTOR
+
+2.1 The resource descriptor describes a firmware resource. See SEC2.txt.
+2.2 The boot descriptor describes a load operation.
+2.3 These are two different structures.
+
+3. EXISTING ADAPTER
+
+3.1 The standard backport has a host-side SEC2 descriptor adapter.
+3.2 The adapter is in sources/sec2-bootdesc.S.
+3.3 The XP host builds a 56-byte descriptor.
+3.4 The newer bootloader expects an 84-byte descriptor.
+3.5 The adapter translates the fields into the 84-byte form.
+3.6 The adapter uses a temporary buffer to protect adjacent state.
+
+4. ACTIVATION GUARDS
+
+4.1 The adapter activates only when its guards match.
+4.2 The guards check the firmware build value and the layout values.
+4.3 The guards are tied to the 376.84 SEC2 firmware.
+
+5. OPEN POINTS
+
+5.1 A new SEC2 set can use a different bootloader build.
+5.2 Check the guards against the new SEC2 set before use. See SEC2.txt.
+5.3 Do not assume the existing adapter applies to a new donor.
+5.4 Update the guards and the field translation if the build differs.
+
+6. REFERENCES
+
+6.1 sources/sec2-bootdesc.S.
+6.2 REBUILDING.md, section 5.4, for the adapter description.

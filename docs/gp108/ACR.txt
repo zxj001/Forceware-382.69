@@ -1,0 +1,63 @@
+ACR - AUTHENTICATED FIRMWARE STARTUP
+====================================
+
+Status: SCOPE-STOP
+
+1. PURPOSE
+
+1.1 ACR prepares the authenticated startup of GPU firmware.
+1.2 ACR runs as signed code on the SEC2 processor.
+1.3 ACR checks the other firmware images before they operate.
+1.4 The card does not reach the graphics engine until ACR completes.
+
+2. CURRENT RESULT
+
+2.1 The GT 1030 stops during ACR startup.
+2.2 The p1 build uses the 376.84 ACR. ACR returns 0x23.
+2.3 The p3 build uses the 382.33 ACR. ACR returns 0x0B.
+2.4 Windows reports Code 10 in both builds.
+
+3. STATUS CODE MEANING
+
+3.1 The codes come from NVIDIA's open-source Tegra driver, nvgpu.
+3.2 In nvgpu, 0x0B is ACR_ERROR_LS_SIG_VERIF_FAIL.
+3.3 This name means a firmware image failed its signature check.
+3.4 The nvgpu source documents these codes for its own ACR. The mapping
+    for the 2017 desktop ACR is not independently confirmed.
+3.5 0x23 is not listed in nvgpu. The standard backport reads 0x23 as a
+    version that is below the chip minimum.
+
+4. WHICH IMAGE FAILED
+
+4.1 nvgpu reads a second mailbox to report the failed processor ID.
+4.2 The XP driver reads only the first mailbox.
+4.3 The failed processor ID is not yet recorded.
+4.4 A read of the second mailbox register would identify the image.
+
+5. LEADING EXPLANATION
+
+5.1 The p3 build mixes firmware from different releases. See SEC2.txt.
+5.2 A consistent firmware set is the next test. See PLAN.txt, Stage 3.
+
+6. SCOPE BOUNDARY
+
+6.1 This work supplies NVIDIA-signed firmware without changes.
+6.2 This work does not change or defeat the signature check.
+6.3 Analysis of the verification internals was stopped on purpose.
+6.4 The correct action is to supply the firmware set that the donor uses
+    for a GT 1030, in the donor's layout.
+6.5 If the card accepts only altered firmware or a skipped check, this
+    work stops at that point.
+
+7. SHARED-OBJECT CAUTION
+
+7.1 The p3 prototype changes the ACR resources for every Pascal GPU.
+7.2 This can affect GP102, GP104, and GP106.
+7.3 Restrict the change to GP108, or test the other cards, before any
+    release.
+
+8. REFERENCES
+
+8.1 DECOMP_NOTES.md, sections "Secure boot (ACR), slot 0" and
+    "Public ACR status codes (nvgpu)".
+8.2 REBUILDING.md, section 5, for the standard firmware repair.
