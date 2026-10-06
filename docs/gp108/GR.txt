@@ -1,0 +1,50 @@
+GR - GRAPHICS ENGINE AND GRAPHICS BUNDLE
+========================================
+
+Status: PARTIAL
+
+1. PURPOSE
+
+1.1 GR is the graphics engine.
+1.2 GR must operate before hardware rendering can pass its tests.
+1.3 GR uses a graphics bundle and two processors, FECS and GPCCS.
+
+2. GRAPHICS BUNDLE
+
+2.1 The graphics bundle is a block of setup data for the engine.
+2.2 The bundle contains several directory types.
+2.3 The types include FECS data, GPCCS data, register lists, and context
+    values.
+2.4 The donor GP108 bundle is at descriptor 0xA9FDEC. Its size is 87603
+    bytes.
+2.5 The GP107 bundle is at descriptor 0xAF5C5C.
+
+3. GP108 BUNDLE COMPARED WITH GP107
+
+3.1 Most directory types are equal between GP108 and GP107.
+3.2 The processor microcode types differ. See FECS.txt and GPCCS.txt.
+3.3 One 4-byte value differs. GP107 uses 7. GP108 uses 5. Its meaning is
+    not confirmed.
+
+4. CONSTRUCTOR
+
+4.1 The GR constructor is slot 29 in the chip table.
+4.2 The donor GP108 constructor extends the GP107 constructor.
+4.3 It changes the bundle getter field.
+4.4 The donor field is +0x420. The XP field is +0x3E0. XP GR fields are
+    0x40 lower than donor fields.
+
+5. PROTOTYPE
+
+5.1 The prototype supplies the GP108 bundle through a new getter.
+5.2 The build reads the bundle from the donor without changes.
+
+6. OPEN POINTS
+
+6.1 The runtime behavior of the new getters is not yet verified.
+6.2 Verification depends on successful authenticated startup. See ACR.txt.
+
+7. REFERENCES
+
+7.1 DECOMP_NOTES.md, sections "GP108 vs GP107 in 382.33" and "GR bundle".
+7.2 sources/gp107/gp107.s for the GP107 reference layout.

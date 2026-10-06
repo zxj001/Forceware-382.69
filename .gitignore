@@ -1,5 +1,5 @@
 /inputs/
-/build-38269/
+/build-*/
 /source-check/
 __pycache__/
 *.pyc

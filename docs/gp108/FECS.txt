@@ -1,0 +1,45 @@
+FECS - GRAPHICS FRONT-END PROCESSOR FIRMWARE
+============================================
+
+Status: PARTIAL
+
+1. PURPOSE
+
+1.1 FECS is a processor inside the graphics engine.
+1.2 FECS runs signed firmware.
+1.3 FECS must start before the graphics engine operates.
+
+2. RESOURCE SET
+
+2.1 The FECS firmware is part of the graphics bundle. See GR.txt.
+2.2 The FECS set has an instruction image and a data image.
+2.3 The FECS set has a separate signature resource.
+2.4 The signature is used during authenticated startup.
+
+3. DONOR RESOURCES
+
+3.1 The GP108 FECS instruction size is 22684 bytes.
+3.2 The GP108 FECS signature is at donor descriptor 0xB2DAF0. Its size is
+    192 bytes.
+3.3 The GP108 FECS firmware differs from the GP107 FECS firmware.
+
+4. CONSTRUCTOR AND SIGNATURE FIELD
+
+4.1 The FECS constructor is slot 18 in the chip table.
+4.2 The donor GP108 constructor writes the signature getter to field
+    +0x24.
+4.3 The donor GP108 constructor clears field +0x28.
+4.4 The GP107 constructor uses field +0x2C.
+4.5 This field difference is mirrored in the prototype.
+
+5. OPEN POINTS
+
+5.1 The XP consumer must read the same field that the prototype writes.
+5.2 Confirm the XP signature field before the next hardware test.
+5.3 The signature and the firmware must come from the same release. Do
+    not mix a GP108 signature with a GP107 image.
+
+6. REFERENCES
+
+6.1 DECOMP_NOTES.md, slot 18 row.
+6.2 linux-firmware nvidia/gp108 for the reference file set.

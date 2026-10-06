@@ -1,0 +1,534 @@
+PLAN: GT 1030 support for Windows XP
+
+Document ID: GP108-PLAN-001
+Revision: 2
+Date: 2026-10-05
+Target: Windows XP SP3, 32-bit, NVIDIA GT 1030 (DEV_1D01)
+Base driver: NVIDIA 368.81, with the Forceware 382.69 changes
+Donor driver: NVIDIA GeForce 382.33, Windows 7/8, 32-bit
+
+1. Purpose
+
+Make the GT 1030 start correctly on Windows XP.
+Then verify display output and hardware graphics acceleration.
+Finally, make a package that another person can build and test.
+
+This document uses an ASD-STE100 style: short sentences, defined technical names, and one action per instruction.
+It has not received a full ASD-STE100 dictionary review.
+See the official ASD-STE100 information (https://www.asd-ste100.org/about_STE.html).
+
+2. Technical names
+
+Name            Meaning in this document
+Backport        Adapt newer hardware support to an older driver.
+GPU             The graphics processor on the card.
+GP108           The NVIDIA chip family used by the GT 1030.
+INF             The installation file that matches a Windows device to a driver.
+Miniport        nv4_mini.sys, the XP driver that controls the GPU.
+Donor           A newer driver that supplies reference code and firmware resources.
+Firmware        A program that runs on a processor inside the GPU.
+Signature       Data used to check the authenticity of firmware.
+ACR             The component that prepares authenticated GPU firmware startup.
+SEC2            A GPU processor used during authenticated firmware startup.
+SEC2 firmware   The program image for SEC2, with its descriptor and signature data.
+FECS / GPCCS    GPU processors used by the graphics engine.
+GR              The graphics engine.
+WPR             A protected memory area used during firmware startup.
+Descriptor      A structure that describes a firmware resource or its loading parameters.
+Callback        A function that the driver selects through a stored function address.
+SHA-256         A hash used to identify exact file contents.
+BAR trace       A record of reads and writes to GPU PCI register and memory regions.
+Pass condition  The result required before the next dependent stage starts.
+
+3. Current condition
+
+The installation succeeds, but Device Manager reports Code 10.
+Code 10 means that Windows could not start the device.
+XP continues to use basic 640 × 480 output.
+Hardware graphics acceleration has not passed a GT 1030 test.
+
+Build  Change                                                   Recorded result
+p1     Add the GT 1030 to the INF.                              Code 10. SEC2 returns 0x23.
+p2     Add GP108 registration and its graphics resources.       Code 10. This build has no BAR trace.
+p3     Also use 382.33 ACR resources and the GP106 ACR object.  Code 10. SEC2 runs longer, then returns 0x0b.
+
+The recorded failure occurs during authenticated firmware startup.
+The exact cause of 0x0b is not confirmed.
+
+Current hypothesis: the mixed firmware releases cause the failure.
+The p3 build uses 382.33 ACR and graphics resources with 376.84 SEC2 firmware.
+The VPR resources already match 382.33.
+A matching SEC2 set could remove this failure, but it does not prove complete GP108 support.
+
+The graphics constructors are present in the prototype.
+Their runtime behavior still needs verification.
+Nine other GP108 table differences still need evaluation.
+
+These facts come from NOTES.md (NOTES.md#status-2026-10-05) and DECOMP_NOTES.md (DECOMP_NOTES.md#status-2026-10-05).
+They describe recorded tests, not a new inspection of the running VM.
+
+3.1 Initialization process
+
+The Windows driver runs on the host CPU.
+Firmware runs on processors inside the GPU.
+SEC2 is one of those processors.
+SEC2 is not the main graphics engine.
+
+ACR startup code and SEC2 firmware are separate resources.
+ACR startup code runs on SEC2 during authenticated startup.
+The later SEC2 firmware participates in the startup of FECS and GPCCS.
+FECS and GPCCS must operate before hardware rendering can pass its tests.
+
+The diagram shows the main dependencies for the GP108 prototype.
+It does not show every call or the exact order of all firmware operations.
+The remaining resource map must establish those details.
+
+  HOST CPU                                  GPU
+  --------                                  ---
+  Windows matches the card to the INF
+                 |
+                 v
+  The XP miniport selects the GPU family
+  and its initialization callbacks
+                 |
+                 v
+  The driver prepares firmware resources,
+  WPR headers, and loading descriptors
+                 |
+                 +-------------------------> SEC2 starts ACR startup code
+                                                       |
+                                                       v
+                                            Authenticated startup prepares
+                                            the required firmware set
+                                                       |
+                             p1: stops with 0x23 <-----+
+                             p3: stops with 0x0b <-----+
+                             Windows reports Code 10   |
+                                                       v
+                                            Required later result:
+                                            SEC2 firmware is operational;
+                                            FECS and GPCCS start
+                                                       |
+                 +-------------------------------------+
+                 v
+  The driver completes GPU initialization
+                 |
+                 v
+  Display output and hardware rendering
+  can be tested
+
+The downward path after the failure is the required successful path.
+The recorded p1 and p3 results do not reach that result.
+p2 has no BAR trace, so it has no recorded firmware status in this diagram.
+The p3 status comes from ACR startup on SEC2.
+It does not prove that the later SEC2 firmware itself is defective.
+
+3.2 Firmware resources and the host interface
+
+The driver must select compatible resources for the target chip.
+A SEC2 resource set includes:
+
+- The image: program instructions and data.
+- The descriptor: information used to load the image.
+- The signature data: information used during authenticated startup.
+
+The driver also constructs a boot descriptor.
+This structure tells the bootloader where to obtain code and data.
+Its field positions must match the selected bootloader.
+The resource descriptor and the constructed boot descriptor are different structures.
+
+The standard backport already has a host-side SEC2 descriptor adapter.
+It translates a 56-byte host descriptor into an 84-byte bootloader descriptor.
+The original embedded buffer has only 76 bytes.
+The adapter uses a temporary buffer to prevent an overwrite of adjacent state.
+It activates only when the tested firmware and layout guards match.
+Check those guards before the use of a different SEC2 resource set.
+Do not assume that the existing adapter applies to a new donor.
+
+The firmware images and signatures remain original NVIDIA data.
+These changes load resources through the driver.
+They do not require a VBIOS flash.
+
+3.3 Why other Pascal cards can work
+
+Pascal identifies an architecture family.
+It does not identify one common firmware startup configuration.
+The GTX 1080 uses GP104.
+The GTX 1080 Ti uses GP102.
+The GT 1030 uses GP108.
+
+XP 368.81 already registers GP104 and GP102 family implementations.
+It also contains Pascal graphics and compiler machinery.
+The standard patches connect and correct those existing paths.
+The INF entry selects the driver for a card.
+The display patches enable missing Pascal display-object allocation paths.
+GP102 also needs the documented firmware and host-interface repairs.
+
+The recorded standard resource combination is:
+
+  ACR: 376.84    VPR: 378.78    SEC2: 376.84
+
+GTX 1080 Ti rendering passed the recorded tests.
+P4000 operation was also recorded; the P4000 uses GP104.
+Those results do not establish a separate test of every Pascal model.
+GP107 still has reported Code 10 failures.
+
+GP108 has a different starting condition.
+XP recognizes its chip ID, but it does not register a GP108 family implementation.
+The standalone prototype supplies that registration and selected graphics resources.
+The standard builder does not apply that prototype.
+Its current GT 1030 INF entry selects the driver without those additions.
+That configuration is the recorded p1 experiment.
+
+The 382.33 donor selects different ACR objects for GP104 and GP108.
+GP108 shares its ACR object with GP102, GP106, and GP107 in that donor.
+Thus GP104 can use a different resource-selection path from GP108.
+The p3 prototype selects the GP106 ACR object for GP108.
+It also selects the 382.33 ACR set.
+That change removes the earlier failure, but startup still returns 0x0b.
+
+The current p3 resource combination is:
+
+  ACR and graphics resources: 382.33
+  SEC2 resources:             376.84
+  VPR resources:              byte-identical to 382.33
+
+The SEC2 resource combination is the leading suspect.
+Its compatibility with the selected ACR and loading structures is not yet proven.
+Different release numbers alone do not prove an incompatible combination.
+The working standard package also uses resources from different releases.
+The exact GP108 requirement that causes 0x0b remains unknown.
+Other callback differences can still require changes after firmware startup succeeds.
+
+3.4 Evidence for the initialization explanation
+
+The recorded XP behavior is in NOTES.md, under GP108 prototypes p2/p3 and BAR0 tracing.
+The chip tables and ACR object selections are in DECOMP_NOTES.md.
+The standard firmware combination and host adapter are in REBUILDING.md, section 5.
+The adapter's guards and field translation are in sources/sec2-bootdesc.S.
+
+The Linux reference also shows SEC2 commands that start FECS and GPCCS.
+It loads a SEC2 image, descriptor, and signature set.
+This reference explains the mechanism; it does not prove the XP runtime result.
+Linux v6.12 reference:
+https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/engine/sec2/gp102.c
+https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/subdev/acr/gp102.c
+
+4. Backport method
+
+Keep the XP driver as the operating-system interface.
+Adapt its GPU registration, callbacks, and resource selection.
+Use the newer driver to identify the required GP108 behavior.
+Extract the applicable NVIDIA firmware without changes to its instructions or signatures.
+
+The Windows 7 donor module is an input to the build process.
+It is not the replacement XP display driver.
+Newer private structure offsets require comparison with the XP structures.
+
+The complete sequence is:
+
+Record the baseline
+        |
+Map the GP108 resource and callback paths
+        |
+Prepare a compatible firmware set       <-- current priority
+        |
+Verify the patch without hardware
+        |
+Verify authenticated firmware startup
+        |
+Complete the other GP108 adaptations
+        |
+Verify display output and acceleration
+        |
+Verify existing GPU support
+        |
+Integrate the reproducible build
+        |
+Prepare the tested release package
+
+5. Procedure
+
+Stage 1. Record a recoverable baseline
+
+Purpose: identify each test and preserve a working recovery path.
+
+1. Record the source commit and branch.
+2. Record the GPU PCI ID and subsystem ID.
+3. Save the p1, p2, and p3 binaries with their SHA-256 values.
+4. Save the existing installation logs and BAR traces.
+5. Verify the available XP snapshots.
+6. Check the VM configuration after each snapshot restore.
+7. Verify guest remote access before the next installation.
+8. Repeat the p3 failure with the same test configuration.
+
+Pass condition: p3 has an identified binary and a repeatable failure.
+The XP guest can return to a known baseline.
+
+Failure action: correct the test environment before another driver change.
+
+The recorded system uses VM 101, GPU passthrough, and the GT 1030 as primary VGA.
+See the test environment (NOTES.md#test-environment).
+
+Stage 2. Complete the resource and callback map
+
+Purpose: prove how the XP driver obtains each GP108 resource.
+
+1. Verify the exact donor hash.
+2. Identify the donor's GP108 family table.
+3. Follow each firmware getter to its descriptor.
+4. Record the payload, header, signature, and loading parameters for each processor.
+5. Identify the matching XP getter and consumer.
+6. Check which signature field each XP consumer reads.
+7. Record the required structure translation.
+8. Check the function arguments and return convention for each replacement callback.
+
+Pass condition: each proposed replacement has a donor source and a verified XP destination.
+
+Failure action: inspect the relevant caller before writing a patch.
+
+The donor uses GP108 family key 0x3d.
+The XP prototype uses key 0x3c.
+XP already recognizes the GT 1030 chip ID.
+
+The prototype supplies FECS, GPCCS, and GR resources through new callbacks.
+The existing implementation does not prove that every XP consumer selects the intended field.
+See the slot map (DECOMP_NOTES.md#slot-map-confirmed-in-both-binaries).
+
+Stage 3. Prepare compatible firmware resources
+
+Purpose: test the leading explanation for the p3 failure.
+
+1. Locate the GP108-compatible SEC2 resources in the 382.33 donor.
+2. Follow the donor's SEC2 selection path.
+3. Identify the complete SEC2 payload, descriptor, and signature set.
+4. Compare the set with the current 376.84 SEC2 resources.
+5. Compare the donor's loading parameters with the XP loading parameters.
+6. Verify the existing 56-byte to 84-byte descriptor adaptation and its activation guards.
+7. Verify WPR header fields, alignment, and resource placement against the donor behavior.
+8. Check compatibility among ACR, SEC2, FECS, and GPCCS resources.
+9. Record every extracted resource hash.
+10. Build the next candidate with the verified resource set.
+11. Restrict new resource selection to GP108 where shared Pascal behavior would otherwise change.
+
+Pass condition: the candidate contains the intended, compatible resources and valid XP loading structures.
+
+Failure action: resolve the missing resource or structure mapping before a hardware test.
+
+The next candidate can be named p4.
+It does not exist as a completed change in this plan.
+Resource selection, packaging, and loading remain the subjects of this work.
+Firmware instructions and signatures remain original NVIDIA data.
+
+The p3 patch changes shared ACR descriptors for other Pascal GPUs.
+This behavior needs isolation or regression tests before release.
+
+Earlier work stopped further secure-boot analysis.
+The resource compatibility question remains open.
+See the recorded scope boundary (DECOMP_NOTES.md#status-2026-10-05).
+
+Stage 4. Verify the candidate without hardware
+
+Purpose: find patch errors before the driver controls the card.
+
+1. Check all input hashes.
+2. Check the original bytes at every patch location.
+3. Compile the added assembly.
+4. Compare the compiled instructions with the inserted instructions.
+5. Verify callback arguments and stack cleanup.
+6. Verify register preservation.
+7. Verify resource sizes and descriptor bounds.
+8. Verify executable section sizes and image alignment.
+9. Verify the PE checksum.
+10. Verify pointers at preferred and relocated image addresses.
+11. Verify the GP108 family registration sequence.
+12. Compare all changed bytes with the planned changes.
+
+Pass condition: the candidate passes binary checks and relevant callback execution checks.
+
+Failure action: correct the failed check before installation.
+
+The current standalone patch checks exact miniport and donor hashes.
+It also checks the GP107 hook and the appended section location.
+Additional checks must cover the new resource changes.
+
+Stage 5. Verify firmware startup on the GT 1030
+
+Purpose: determine whether the candidate removes the current initialization failure.
+
+1. Install the candidate through a clean installation.
+2. Restart the guest.
+3. Verify the installed miniport hash.
+4. Record the device status.
+5. Record SEC2 completion and mailbox results.
+6. Check whether FECS and GPCCS start.
+7. Save the trace with the candidate hash.
+
+Pass condition: authenticated firmware startup completes and initialization reaches the graphics engine.
+A change from 0x0b to another error does not satisfy this condition.
+
+Failure action: identify the first failed operation from the trace.
+Compare its inputs with the mapped donor path.
+Change one logical cause in the next candidate.
+
+The recorded BAR tracing method can cause a later KVM internal error during basic VGA memory writes.
+That error occurs after the recorded NVIDIA initialization failure.
+Use a normal VM boot to confirm the driver result separately.
+
+Stage 6. Complete the other GP108 adaptations
+
+Purpose: correct GP108 behavior beyond firmware loading.
+
+1. Examine slots 4, 5, 6, 8, 15, 27, 50, 53, and 55.
+2. Identify the engine and purpose of each slot.
+3. Compare the donor behavior with the inherited XP behavior.
+4. Map the required constants and callbacks to XP structures.
+5. Keep inherited behavior where the comparison proves equivalence.
+6. Implement each required difference as a separate logical change.
+7. Verify each change before a hardware test.
+
+Pass condition: each real difference has an implemented adaptation or documented evidence that adaptation is unnecessary.
+
+Failure action: keep the uncertain change out of the candidate until its behavior is understood.
+
+Slot 5 changes memory-subsystem registers.
+Determine their purpose before applying those writes.
+Some capability fields also depend on different private structure layouts.
+
+Static comparison can start before Stage 5 completes.
+Runtime validation depends on successful firmware startup.
+See the twelve real differences (DECOMP_NOTES.md#gp108-vs-gp107-in-38233).
+
+Stage 7. Verify display output and graphics acceleration
+
+Purpose: establish useful XP driver operation.
+
+1. Verify Device Manager reports Code 0 after a normal restart.
+2. Verify the installed display DLL and miniport hashes.
+3. Set a standard low-bandwidth display mode.
+4. Check the physical monitor output.
+5. Test DirectDraw.
+6. Test Direct3D 9 hardware rendering.
+7. Verify rendered pixels through draw and readback checks.
+8. Test OpenGL rendering.
+9. Test supported higher display modes.
+10. Verify the actual resolution and refresh rate.
+11. Test restart, mode changes, and monitor reconnection.
+12. Test representative XP games.
+
+Pass condition: hardware rendering and stable physical output both work.
+Basic VGA output or software rendering does not satisfy this condition.
+
+Failure action: identify the failing graphics or display path before another change.
+
+Test power transitions separately if the release will claim support for them.
+Record test duration and workload for stability results.
+An installation result alone does not prove rendering support.
+
+Stage 8. Verify optional features and existing GPU support
+
+Purpose: measure the feature coverage and detect regressions.
+
+1. Check whether internal name tables contain the required GT 1030 records.
+2. Add missing records where the verified lookup path requires them.
+3. Test CUDA context operations if compute support is in scope.
+4. Test an OpenCL GPU workload if OpenCL support is in scope.
+5. Test GPU PhysX if PhysX support is in scope.
+6. Verify NVIDIA Control Panel operations used by this card.
+7. Repeat initialization and rendering checks on available GP102, GP104, and GP106 cards.
+8. Verify existing shared display behavior where the patch changes it.
+
+Pass condition: each claimed feature has a recorded result.
+Shared changes have appropriate regression coverage.
+
+Failure action: fix the regression or restrict the change to GP108.
+
+Record features without tests as unverified.
+GT 1030 success does not prove GP107 support.
+Keep GP107 installation excluded until it passes separate tests.
+
+Stage 9. Integrate the reproducible build
+
+Purpose: replace the standalone experiment with a complete build recipe.
+
+1. Add the 382.33 donor as the third firmware donor input.
+2. Add its pinned hash to patches.json.
+3. Add each new resource's extraction record and decoded hash.
+4. Add guarded binary patch records.
+5. Add GP108 source verification to verify_sources.py.
+6. Update the required installer templates.
+7. Update package hashes and inventories.
+8. Update the build identification fields.
+9. Build from clean inputs without a previously patched miniport.
+10. Verify the extracted package contents.
+11. Install the integrated package on the GT 1030.
+12. Repeat the core initialization and rendering tests.
+
+Pass condition: clean inputs reproduce the intended driver files, and the integrated package passes hardware tests.
+
+Failure action: correct the build recipe before preparing a release.
+
+The standard builder currently accepts two firmware donors.
+The 382.33 donor is additional to those inputs.
+See REBUILDING.md (REBUILDING.md#2-rebuild-instructions).
+
+Stage 10. Prepare the release package
+
+Purpose: state exactly what the tested package supports.
+
+1. Record the tested card model and PCI ID.
+2. Record the tested operating-system build.
+3. Record supported features and known failures.
+4. State whether tests used GPU passthrough or native XP hardware.
+5. Verify the normal clean-install workflow.
+6. Verify recovery to the preceding driver.
+7. Update the README and installation instructions.
+8. Update the supported-device list.
+9. Preserve source and firmware licensing information.
+10. Prepare the package with matching checksums and build identification.
+
+Pass condition: the package is reproducible, tested, and described accurately.
+
+Publish the release only after a separate release instruction.
+One Gigabyte GT 1030 test does not establish support for every board or memory variant.
+
+6. Immediate next work
+
+1. Preserve the identified p3 baseline.
+2. Map the 382.33 GP108 SEC2 payload, descriptor, and signature getters.
+3. Verify the matching XP consumer fields.
+4. Prepare a GP108-specific candidate with a compatible resource set.
+5. Complete Stage 4 before the next hardware test.
+6. Use Stage 5 to determine whether 0x0b disappears through successful firmware startup.
+
+If firmware startup succeeds, continue with the other GP108 differences.
+If firmware startup fails, investigate the first failure before adding unrelated changes.
+
+7. Required records
+
+For each candidate, record:
+
+- Source commit and candidate name.
+- Base driver and donor hashes.
+- Extracted resource hashes.
+- Installed driver file hashes.
+- Description of the logical change.
+- Installation result and device status.
+- Firmware startup result and trace location.
+- Display and rendering test results.
+- Recovery result and known limitations.
+
+8. Source files
+
+- NOTES.md (NOTES.md): test environment, prototype results, and recorded status.
+- DECOMP_NOTES.md (DECOMP_NOTES.md): constructor mappings and remaining differences.
+- patch_gp108.py (sources/gp108/patch_gp108.py): current standalone prototype patcher.
+- gp108.s (sources/gp108/gp108.s): current GP108 registration and callbacks.
+- sec2-bootdesc.S (sources/sec2-bootdesc.S): existing SEC2 descriptor adaptation.
+- REBUILDING.md (REBUILDING.md): standard package reconstruction and validation.
+- rebuild.py (rebuild.py): package builder.
+- patches.json (patches.json): input hashes, resource records, and binary patch records.
+- verify_sources.py (verify_sources.py): independent source and binary verification.
+
+The final Next section in NOTES.md predates the documented p2 and p3 results.
+Use the later status sections and this plan for the current work sequence.

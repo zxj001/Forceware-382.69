@@ -340,8 +340,8 @@
     {
       "tree": "package",
       "path": "Display.Driver/nv4_dispi.inf",
-      "sha256": "4e630ca9c81e73e67d55e0b4fa5e560cc6f86757e32af2e846a961ed333b8315",
-      "size": 98864,
+      "sha256": "992fab6c64f1f13494663dfc22a8a3f31fb854c298a853b539fa30667a874a13",
+      "size": 98953,
       "source": "Display.Driver/nv4_dispi.inf",
       "source_sha256": "c3c4efc2c3e252a64be4da56e644e8345f7d0e1877e9f1bfc81194dee380ef70",
       "kind": "template",

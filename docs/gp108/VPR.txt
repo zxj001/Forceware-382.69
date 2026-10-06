@@ -1,0 +1,32 @@
+VPR - VIDEO PROTECTED REGION RESOURCES
+======================================
+
+Status: DONE
+
+1. PURPOSE
+
+1.1 The VPR resources set the protected-memory state that the verifier
+    expects during startup.
+
+2. CURRENT STATE
+
+2.1 The standard backport uses the 378.78 VPR resources.
+2.2 The VPR set has a payload, a header, and signature records.
+
+3. COMPATIBILITY CHECK
+
+3.1 This work compared the 378.78 VPR resources with the 382.33 donor.
+3.2 The VPR payload is byte-identical in the 382.33 donor.
+3.3 The VPR header is byte-identical in the 382.33 donor.
+3.4 The VPR signatures are byte-identical in the 382.33 donor.
+
+4. RESULT
+
+4.1 The VPR resources already match the donor.
+4.2 This piece needs no change for GP108.
+4.3 The VPR resources are not the cause of the current failure.
+
+5. REFERENCES
+
+5.1 REBUILDING.md, section 5.2, for the standard VPR set.
+5.2 NOTES.md, firmware-consistency findings.
