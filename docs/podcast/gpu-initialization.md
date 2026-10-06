@@ -3,7 +3,7 @@
 A two-host podcast transcript about GPU initialization, driver backporting, and the experimental GeForce GT 1030 work on Windows XP.
 
 - **Hosts:** Maya asks the questions; Theo explains the implementation.
-- **Estimated running time:** 20–25 minutes, depending on delivery and pauses.
+- **Estimated running time:** 35–45 minutes, depending on delivery and pauses.
 - **Project:** Forceware 382.69, the custom package based on NVIDIA 368.81 for XP.
 - **Episode status:** The GT 1030 experiment still reports Code 10. The firmware compatibility explanation is a hypothesis, not a completed fix.
 
@@ -14,15 +14,17 @@ A two-host podcast transcript about GPU initialization, driver backporting, and 
 3. The card before the NVIDIA driver
 4. How Windows selects the driver
 5. How the driver selects the chip implementation
-6. Firmware and the processors that run it
-7. The structures between the host and the GPU
-8. Graphics startup and useful acceleration
-9. Why GTX 1080 support differs from GT 1030 support
-10. The GT 1030 experiments
-11. Why a driver backport is difficult
-12. How a backport is developed
-13. The next experiment and its pass conditions
-14. Closing
+6. SEC2 and the firmware it runs
+7. ACR and authenticated startup
+8. FECS GPCCS and the graphics bundle
+9. The structures between the host and the GPU
+10. Graphics startup and useful acceleration
+11. Why GTX 1080 support differs from GT 1030 support
+12. The GT 1030 experiments
+13. Why a driver backport is difficult
+14. How a backport is developed
+15. The next experiment and its pass conditions
+16. Closing
 
 ## What Code 10 tells us
 
@@ -52,6 +54,38 @@ A two-host podcast transcript about GPU initialization, driver backporting, and 
 
 **THEO:** That's a useful starting analogy. Registers are the controls and indicators. Memory holds data and other state. But a wrong control write can affect the whole device. We must know what a register means for the actual chip before copying a setting from another driver.
 
+**MAYA:** Take me around the hardware. What does each piece contribute to startup?
+
+**THEO:** Start with PCI Express and the bus interface. They give the host a way to discover the device and communicate with it. The address windows are called BARs, for Base Address Registers. Mapping a register BAR lets the driver read and write GPU controls. Bus setup must work before those accesses can tell us anything useful. A BAR trace records that traffic; it is an observation method, not another GPU engine.
+
+**MAYA:** Then the warehouse: the card's memory?
+
+**THEO:** Video memory, or VRAM, stores images, command buffers, firmware resources, and graphics state. The memory controller operates the attached memory. During initialization, the driver must establish usable memory configuration and capacity before relying on allocations there. The memory subsystem appears in our GP108 callback differences, so its register settings need their own analysis.
+
+**MAYA:** Is the memory controller also the MMU?
+
+**THEO:** They have different jobs. The memory-management unit, or MMU, translates GPU virtual addresses into the memory locations they refer to and applies access rules. The driver prepares mappings and page tables so an engine can find its buffers. A correct firmware image at an address the GPU cannot read is still unusable. That is why memory access belongs in the startup investigation.
+
+**MAYA:** What gets an application's commands into the engines?
+
+**THEO:** The command-submission hardware reads command buffers and routes their operations. NVIDIA drivers often call that machinery FIFO, a name drawn from “first in, first out.” Here it describes a command-handling subsystem. A channel associates submitted work with its state and memory mappings. Initialization must prepare the engine interfaces that later channels will use; creating a rendering workload also requires a valid channel and buffers. A working register interface does not prove this command path works.
+
+**MAYA:** Where do the CUDA cores fit?
+
+**THEO:** Shader execution happens in streaming multiprocessors, or SMs. Those sit within larger graphics processing clusters, called GPCs. They perform the programmable work used by graphics and compute. Startup must configure the active hardware and its state before dispatching that work. We must use the target chip's configuration rather than assuming it has the donor chip's layout.
+
+**MAYA:** And power management?
+
+**THEO:** Power, clocks, and resets provide the operating conditions for the engines. An engine held in reset cannot execute its firmware; missing clock or power setup can look like a timeout. The power-management unit, PMU, is another embedded controller in this architecture. It is separate from SEC2. Our recorded GP108 failure is in the ACR startup path on SEC2, so mentioning the PMU does not establish a PMU defect or a required PMU replacement.
+
+**MAYA:** Does the display engine draw the triangles?
+
+**THEO:** The graphics engine produces the rendered image. The display engine reads a surface and sends a timed signal through a physical output. It needs valid memory, display objects, mode configuration, and link setup. Rendering a correct image into memory and showing it on a monitor are separate checks. We will return to both after the firmware tour.
+
+**MAYA:** What about the video engines?
+
+**THEO:** Video decoding, and encoding on chips that provide it, use specialized engines. Those features can have additional initialization and firmware requirements. They need separate tests if we include them in support. Our current GP108 pass condition concerns device startup, physical output, and graphics rendering; it does not establish every video feature.
+
 **MAYA:** And the startup sequence is one long checklist?
 
 **THEO:** It has dependencies, but the implementation can interleave reset, memory, firmware, and display operations. Our diagram is an overview of those dependencies. It is not a claim that every driver makes every call in exactly that order.
@@ -61,6 +95,10 @@ A two-host podcast transcript about GPU initialization, driver backporting, and 
 **MAYA:** Why can a machine show a boot screen before I install the graphics driver?
 
 **THEO:** Platform firmware and the card's firmware can establish basic display operation before the full operating-system driver takes over. A card can provide an early picture while accelerated graphics remains unavailable.
+
+**MAYA:** Name the card firmware for me.
+
+**THEO:** VBIOS means video BIOS. It contains card-specific information and startup support used by the platform and driver. That information helps describe the board's memory and display configuration. It belongs to the physical card, while our driver supplies the engine firmware we will discuss next. The exact early-display path depends on the platform, so a boot picture does not tell us that every NVIDIA startup operation completed.
 
 **MAYA:** So a picture on the monitor is useful evidence, but limited evidence.
 
@@ -106,17 +144,51 @@ A two-host podcast transcript about GPU initialization, driver backporting, and 
 
 **THEO:** Right. Sharing an architecture helps us reuse machinery. It does not make every initialization callback, resource, or capability identical.
 
-## Firmware and the processors that run it
+## SEC2 and the firmware it runs
 
 **MAYA:** Let's meet the small processors inside the GPU.
 
-**THEO:** For this investigation, three names matter: SEC2, FECS, and GPCCS. SEC2 is a processor involved in authenticated startup. FECS and GPCCS are control processors used by the graphics engine. Their programs are firmware.
+**THEO:** They use NVIDIA's Falcon microcontroller architecture on the Pascal path we are examining. A Falcon has its own instruction and data storage and executes a control program. That program is firmware. These controllers manage engines and their state; the SMs we met earlier execute the application's shaders and compute work.
+
+**MAYA:** Start with SEC2. What is it, and why do we need it?
+
+**THEO:** SEC2 is a security processor inside the GPU. It provides an execution environment for the authenticated-startup code used on this path. The host prepares resources, but the GPU performs the required trusted startup operations. Without that stage completing, our driver cannot proceed to usable graphics initialization.
+
+**MAYA:** How does the driver actually use SEC2?
+
+**THEO:** It prepares the selected program and loading information, arranges access to those resources, and starts the processor through its control interface. It then observes completion or failure. Our trace includes processor state and mailbox registers: small registers through which firmware can communicate status to the host.
+
+**MAYA:** So a mailbox value is part of an interface, not an explanation by itself.
+
+**THEO:** Exactly. We need the meaning for the actual firmware that wrote it. Reading the same value in another driver's definitions is a lead to verify. It does not automatically establish that our desktop firmware uses the same meaning.
+
+**MAYA:** What happens on SEC2 after the authenticated-startup program?
+
+**THEO:** The later operational SEC2 firmware participates in starting FECS and GPCCS on this path. That is a separate resource set from the ACR startup code. We need the complete compatible set: its program image, resource descriptor, and signature data. The boot descriptor that the host constructs must also match its bootloader.
+
+## ACR and authenticated startup
 
 **MAYA:** And ACR is another processor?
 
-**THEO:** ACR names the authenticated-startup machinery and its code. In the Pascal path we are discussing, ACR startup code runs on SEC2. The ACR resources and the later SEC2 firmware resources are separate.
+**THEO:** ACR names the authenticated firmware-startup machinery. There is a host-side driver component that selects resources and prepares startup, and there is signed startup code that executes on the GPU. In the Pascal path we are discussing, that startup code runs on SEC2. Selecting an ACR object in the driver selects behavior and resources; it does not create another hardware processor.
 
-**MAYA:** Why does that distinction matter?
+**MAYA:** Why does the GPU need an authentication stage?
+
+**THEO:** These firmware programs control internal engine state. The startup design requires trusted programs before those engines operate. Authentication checks the supplied program against its signature data. Protection of the prepared firmware region helps maintain that trust. Successful startup must establish the required state before later engine work can continue.
+
+**MAYA:** Is that the same as checking that a download has the right hash?
+
+**THEO:** They answer different questions. A hash in our build recipe identifies the exact input we intended to use. A firmware signature is part of the GPU's authentication process. A correctly identified donor file can still be unsuitable for a target chip or loaded incorrectly. We need both reproducible inputs and a compatible runtime resource set.
+
+**MAYA:** Walk through ACR's use during initialization.
+
+**THEO:** At the dependency level, the host selects the chip's startup implementation and collects the required images, signatures, and descriptors. It builds the protected-memory layout and prepares the ACR loading information. SEC2 executes the signed ACR startup code. That path performs authenticated setup for the supplied firmware set. The host checks the reported result before continuing with the processors and graphics engine that depend on it.
+
+**MAYA:** Does ACR success mean every engine is already running?
+
+**THEO:** No. Authentication and preparation can precede an engine's later start. On our path, operational SEC2 firmware participates in starting the graphics control processors. The exact calls and timing still need to be established for the donor and XP implementation. The important dependency is that a failed authenticated-startup stage prevents us from validating the later graphics stages.
+
+**MAYA:** Does a failure reported on SEC2 identify which firmware failed?
 
 **THEO:** Because “something failed on SEC2” does not automatically mean the later SEC2 firmware is the faulty image. The processor can be executing the ACR startup program when it reports a failure concerning the prepared firmware set.
 
@@ -124,15 +196,61 @@ A two-host podcast transcript about GPU initialization, driver backporting, and 
 
 **THEO:** Program images, the descriptors needed to locate and load them, and signature data. The authenticated startup path checks the required resources before successful engine startup. On this path, operational SEC2 firmware also participates in starting FECS and GPCCS.
 
+**MAYA:** What kinds of mistakes can stop ACR even if the firmware is original?
+
+**THEO:** Selecting an incompatible set, associating a signature with the wrong image, or constructing incorrect loading information can prevent startup. A resource getter that returns the wrong data is another possibility. A failure at this boundary therefore sends us back to the complete resource and loading contract. It does not immediately prove that an image's instructions are defective.
+
 **MAYA:** Can we fix a rejected image by changing a few instructions inside it?
 
 **THEO:** That would no longer preserve the original signed image. Our approach uses NVIDIA's signed firmware without changing its instructions or signatures. We must supply the compatible images and the correct loading structures. We do not bypass the firmware checks.
+
+## FECS GPCCS and the graphics bundle
+
+**MAYA:** Now explain the processors that ACR and SEC2 help bring into operation. What is FECS?
+
+**THEO:** FECS is the front-end context-switch controller in the graphics engine. Its firmware coordinates graphics context operations. A context is the collection of state for a workload; switching contexts means saving the state of one workload and restoring another. The GPU needs that machinery so work executes with the correct engine state.
+
+**MAYA:** What is its initialization job?
+
+**THEO:** The driver must supply the appropriate FECS instruction image, data image, and signature, then establish successful processor startup before relying on its graphics context operations. Our GP108 prototype supplies different FECS resources from the GP107 resources it inherited. It also changes where the signature getter is stored. We still must verify that the XP consumer reads that field.
+
+**MAYA:** Is GPCCS doing the same thing somewhere else?
+
+**THEO:** GPCCS is the context-switch controller associated with a graphics processing cluster, a GPC. FECS handles coordination at the front end; GPCCS handles cluster-side context operations. They work together so the engine's distributed state can be managed consistently. Both are controllers running firmware, rather than the shader cores themselves.
+
+**MAYA:** And for GPCCS startup?
+
+**THEO:** Again, supply its instruction and data images with the matching signature, make the loading information correct, and verify that the processor becomes operational. GP108's GPCCS data image has the same size as GP107's but different bytes. Equal size does not establish equivalence. Its signature-getter field also differs, so the XP object layout must be checked.
+
+**MAYA:** Where does GR fit into this pair?
+
+**THEO:** GR is the graphics engine as a whole. FECS and GPCCS are control processors within that system. GR also includes the hardware that executes graphics and compute operations. Its initialization prepares engine state, topology-dependent settings, and the contexts used for work. Starting the two controllers is a dependency of that work, not the complete rendering test.
+
+**MAYA:** We keep saying “graphics bundle.” Is that a third firmware program?
+
+**THEO:** The bundle is a packaged collection of setup resources. In our donor, it includes FECS and GPCCS data, register lists, and context values. A directory identifies the different kinds of content. Some content is processor code; some describes engine setup. The GR resource getter selects the bundle the driver will consume.
+
+**MAYA:** Why replace the bundle instead of leaving GP107's in place?
+
+**THEO:** The comparison identifies GP108-specific processor resources and another small value whose meaning is still unconfirmed. The prototype supplies the donor's GP108 bundle unchanged. It also adapts the getter to XP's private object layout. That supplies the resource, but its runtime use remains unverified while authenticated startup fails.
+
+**MAYA:** Then each piece has a separate question: is the right data selected, can it start, and can its dependent operation work?
+
+**THEO:** Yes. Finding a bundle in the patched binary answers a static resource question. A successful graphics draw answers a much larger runtime question. We must keep those results distinct.
 
 ## The structures between the host and the GPU
 
 **MAYA:** If we have the right firmware file, why isn't loading it straightforward?
 
 **THEO:** The bootloader needs instructions about the load operation: where code and data are, their sizes, and the entry point. The host encodes those instructions in a boot descriptor. The bootloader interprets particular fields at particular positions.
+
+**MAYA:** Define bootloader and descriptor separately.
+
+**THEO:** A bootloader is a small program that prepares and starts another program. A descriptor is data that tells a consumer how to interpret or locate something. Our resource descriptor describes the firmware resource; the constructed boot descriptor describes a load operation. Neither is the firmware's signature. Confusing those structures can make us copy the right image with the wrong instructions for loading it.
+
+**MAYA:** And a getter?
+
+**THEO:** A getter is a host-side function that returns a selected resource or value to the driver. The family constructors install the appropriate getters in driver objects. During startup, the driver calls them to obtain the images, descriptors, or signatures it needs. A valid resource sitting in the binary is useless if the active getter selects another resource or writes its address into the wrong field.
 
 **MAYA:** So both sides need to agree on the format.
 
@@ -148,7 +266,23 @@ A two-host podcast transcript about GPU initialization, driver backporting, and 
 
 **MAYA:** And protected memory adds another interface?
 
-**THEO:** Yes. The driver prepares a protected region, called WPR, with headers, images, signatures, and loading information. Correct sizes alone are not enough. The pointers, field values, alignment, and resource associations must also be correct.
+**THEO:** Yes. WPR is the protected memory region used to hold the prepared firmware set. Its protection helps prevent ordinary writes from changing the trusted contents after setup. The driver builds headers that identify each processor's resources and their locations. The authenticated-startup machinery uses that arrangement to find and process the images.
+
+**MAYA:** So WPR is a place, not another engine or program.
+
+**THEO:** Exactly. A header is the accompanying description, an image is the program and data, and a signature supplies authentication information. Correct sizes alone are not enough. The field values, alignment, and resource associations must also be correct. Our static comparison found matching header sizes; it did not verify every field for the GP108 set.
+
+**MAYA:** VPR sounds similar. What is it?
+
+**THEO:** VPR means video protected region. In this backport, the VPR resources establish the protected-memory state expected during startup. That resource set includes a payload, a header, and signature records. The standard patches supply a matched set from 378.78. WPR describes the prepared firmware storage we just discussed; VPR names a separate protected-memory mechanism and its setup resources. They are not interchangeable labels.
+
+**MAYA:** Why is VPR part of a graphics startup conversation?
+
+**THEO:** Because startup depends on the expected protected-memory configuration, even before an application draws anything. Supplying the correct graphics firmware does not repair a separate missing memory-protection setup. The standard package already addressed this dependency. Its VPR payload, header, and signatures are byte-identical to the 382.33 donor's corresponding resources, so replacing those bytes is not a supported explanation for the current GP108 failure. That comparison does not prove every surrounding field or call is correct.
+
+**MAYA:** Can you put the pieces together in one pass?
+
+**THEO:** The host's family callbacks choose resources. Getters return the selected images, descriptors, and signatures. The host arranges the firmware set and headers for WPR and prepares the bootloader's loading data. VPR setup supplies its separate required protected-memory state. ACR startup executes on SEC2 and performs authenticated setup. Operational SEC2 firmware then participates in starting FECS and GPCCS, which GR needs for its graphics operations. That is the dependency picture; it does not establish an exact order for every VPR, WPR, or processor operation.
 
 ## Graphics startup and useful acceleration
 
@@ -159,6 +293,18 @@ A two-host podcast transcript about GPU initialization, driver backporting, and 
 **MAYA:** What is a context?
 
 **THEO:** It is the state associated with a graphics workload: the objects and settings that let the GPU execute that workload correctly. A driver can recognize the device and start firmware while still constructing the wrong context state.
+
+**MAYA:** Follow one triangle after that state exists.
+
+**THEO:** The application calls a graphics API such as Direct3D. The host driver prepares commands and the shader program needed for that draw. The shader compiler turns the application's shader into instructions the GPU can execute. Command-submission hardware delivers the work to GR, using the workload's context and memory mappings. Shader and fixed-function graphics hardware produce pixels in a render target.
+
+**MAYA:** Is the compiler one of the Falcon firmware pieces?
+
+**THEO:** The compiler we are discussing is part of the host graphics software. Its output runs on the shader hardware. Falcon firmware manages internal control operations. The XP driver already contains Pascal compiler and graphics machinery, but those existing pieces become useful only when initialization and submission work for the selected chip.
+
+**MAYA:** Then the display engine reads the finished image?
+
+**THEO:** When that image is selected for display, the display engine scans a surface out to the monitor. The driver must create accepted display objects, configure a mode, and establish the physical link. Our package's display-class fixes address part of that interface. We test drawing and readback to check rendering, then physical output to check presentation. Either can fail independently.
 
 **MAYA:** How do we show that acceleration actually works?
 
@@ -320,21 +466,29 @@ A two-host podcast transcript about GPU initialization, driver backporting, and 
 
 ## Show notes and sources
 
-The following links support the technical explanation and the recorded experiment. The firmware-startup diagram is in section 3.1 of the plan.
+The following links support the technical explanation and the recorded experiment. The firmware-startup diagram is in section 3.1 of the plan. The hardware tour explains functional roles; the Nouveau references help explain those roles and resource interfaces, but do not establish the XP driver's exact call sequence.
 
 - [Initialization diagram and backport procedure](../gp108/PLAN.txt)
 - [Recorded p1 p2 and p3 results](../gp108/NOTES.md#2026-10-05-gp108-prototypes-p2p3-and-bar0-tracing)
 - [Chip-family tables and the GP108 differences](../gp108/DECOMP_NOTES.md)
+- [INF device matching](../gp108/pieces/INF.txt) and [family registration](../gp108/pieces/REGISTRATION.txt)
 - [ACR status interpretation and its desktop applicability limit](../gp108/pieces/ACR.txt)
 - [SEC2 resource set and the mixed-resource hypothesis](../gp108/pieces/SEC2.txt)
 - [Boot descriptor adapter and its activation guards](../gp108/pieces/BOOTDESC.txt)
 - [FECS signature selection](../gp108/pieces/FECS.txt) and [GPCCS signature selection](../gp108/pieces/GPCCS.txt)
+- [GR and the contents of the graphics bundle](../gp108/pieces/GR.txt)
 - [Protected-memory layout](../gp108/pieces/WPR.txt)
+- [VPR resources and the donor comparison](../gp108/pieces/VPR.txt)
 - [Remaining non-firmware callbacks](../gp108/pieces/CAPABILITY-SLOTS.txt)
 - [Existing GT 1030 internal name record](../gp108/pieces/GPU-NAMES.txt)
+- [Reproducible build integration](../gp108/pieces/BUILD.txt)
 - [Standard package implementation and recorded validation](../../REBUILDING.md)
 - [Host-side descriptor adapter source](../../sources/sec2-bootdesc.S)
 - [Microsoft WDDM overview](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/windows-vista-display-driver-model-design-guide) for the driver-model boundary introduced with Windows Vista
 - [Nouveau Pascal SEC2 implementation](https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/engine/sec2/gp102.c) for firmware loading and commands that start FECS and GPCCS
 - [Nouveau Pascal ACR implementation](https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/subdev/acr/gp102.c) for protected-memory and startup structures
+- [Nouveau graphics context initialization](https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/engine/gr/gf100.c) for controller startup and context preparation
+- [Spliet and Mullins on GPU context switching](https://ospert18.ittc.ku.edu/ospert2018_roy.pdf) for the FECS and GPCCS roles; the experiments in this reference concern earlier GPUs, not our XP prototype
+- [NVIDIA Pascal tuning guide](https://docs.nvidia.com/cuda/archive/12.9.1/pascal-tuning-guide/index.html) for SM execution and memory organization
+- [Nouveau Pascal memory management](https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/subdev/mmu/gp100.c), [framebuffer setup](https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/subdev/fb/gp102.c), and [FIFO setup](https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/engine/fifo/gp100.c) for the memory and command interfaces
 - [NVIDIA open kernel module compatibility](https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus) for the supported GPU generations
