@@ -1,6 +1,6 @@
 # Podcast outline: How a GPU starts up (and why our GT 1030 doesn't, yet)
 
-Rough outline for a two-host, beginner-friendly episode of about 15-20 minutes. Hosts: **Host A** (explains) and **Host B** (asks the questions a newcomer would ask). Each segment lists the talking points; the full script is still to be written.
+Original rough outline for a two-host, beginner-friendly episode. The completed [podcast transcript](gpu-initialization.md) uses Maya and Theo and includes the verified technical details and qualifications. Read the transcript for the final episode.
 
 Source material: [docs/gp108](../gp108/) (README, NOTES.md, PLAN.txt and the per-piece files).
 
