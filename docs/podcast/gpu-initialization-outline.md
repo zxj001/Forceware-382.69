@@ -5,7 +5,7 @@ Original rough outline for a two-host, beginner-friendly episode. The completed 
 Source material: [docs/gp108](../gp108/) (README, NOTES.md, PLAN.txt and the per-piece files).
 
 ## 1. Cold open (1 min)
-- Host B: "I plugged a five-year-old graphics card into a twenty-year-old operating system, and Windows says 'This device cannot start.' Why?"
+- Host B: "I plugged a newer graphics card into Windows XP, and Windows says 'This device cannot start.' Why?"
 - The episode's promise: follow a GPU from power-on to a working desktop, and see where ours stops.
 
 ## 2. What a GPU is, from the computer's point of view (2 min)
