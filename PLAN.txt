@@ -1,7 +1,7 @@
 PLAN: GT 1030 support for Windows XP
 
 Document ID: GP108-PLAN-001
-Revision: 1
+Revision: 2
 Date: 2026-10-05
 Target: Windows XP SP3, 32-bit, NVIDIA GT 1030 (DEV_1D01)
 Base driver: NVIDIA 368.81, with the Forceware 382.69 changes
@@ -30,6 +30,7 @@ Firmware        A program that runs on a processor inside the GPU.
 Signature       Data used to check the authenticity of firmware.
 ACR             The component that prepares authenticated GPU firmware startup.
 SEC2            A GPU processor used during authenticated firmware startup.
+SEC2 firmware   The program image for SEC2, with its descriptor and signature data.
 FECS / GPCCS    GPU processors used by the graphics engine.
 GR              The graphics engine.
 WPR             A protected memory area used during firmware startup.
@@ -65,6 +66,153 @@ Nine other GP108 table differences still need evaluation.
 
 These facts come from NOTES.md (NOTES.md#status-2026-10-05) and DECOMP_NOTES.md (DECOMP_NOTES.md#status-2026-10-05).
 They describe recorded tests, not a new inspection of the running VM.
+
+3.1 Initialization process
+
+The Windows driver runs on the host CPU.
+Firmware runs on processors inside the GPU.
+SEC2 is one of those processors.
+SEC2 is not the main graphics engine.
+
+ACR startup code and SEC2 firmware are separate resources.
+ACR startup code runs on SEC2 during authenticated startup.
+The later SEC2 firmware participates in the startup of FECS and GPCCS.
+FECS and GPCCS must operate before hardware rendering can pass its tests.
+
+The diagram shows the main dependencies for the GP108 prototype.
+It does not show every call or the exact order of all firmware operations.
+The remaining resource map must establish those details.
+
+  HOST CPU                                  GPU
+  --------                                  ---
+  Windows matches the card to the INF
+                 |
+                 v
+  The XP miniport selects the GPU family
+  and its initialization callbacks
+                 |
+                 v
+  The driver prepares firmware resources,
+  WPR headers, and loading descriptors
+                 |
+                 +-------------------------> SEC2 starts ACR startup code
+                                                       |
+                                                       v
+                                            Authenticated startup prepares
+                                            the required firmware set
+                                                       |
+                             p1: stops with 0x23 <-----+
+                             p3: stops with 0x0b <-----+
+                             Windows reports Code 10   |
+                                                       v
+                                            Required later result:
+                                            SEC2 firmware is operational;
+                                            FECS and GPCCS start
+                                                       |
+                 +-------------------------------------+
+                 v
+  The driver completes GPU initialization
+                 |
+                 v
+  Display output and hardware rendering
+  can be tested
+
+The downward path after the failure is the required successful path.
+The recorded p1 and p3 results do not reach that result.
+p2 has no BAR trace, so it has no recorded firmware status in this diagram.
+The p3 status comes from ACR startup on SEC2.
+It does not prove that the later SEC2 firmware itself is defective.
+
+3.2 Firmware resources and the host interface
+
+The driver must select compatible resources for the target chip.
+A SEC2 resource set includes:
+
+- The image: program instructions and data.
+- The descriptor: information used to load the image.
+- The signature data: information used during authenticated startup.
+
+The driver also constructs a boot descriptor.
+This structure tells the bootloader where to obtain code and data.
+Its field positions must match the selected bootloader.
+The resource descriptor and the constructed boot descriptor are different structures.
+
+The standard backport already has a host-side SEC2 descriptor adapter.
+It translates a 56-byte host descriptor into an 84-byte bootloader descriptor.
+The original embedded buffer has only 76 bytes.
+The adapter uses a temporary buffer to prevent an overwrite of adjacent state.
+It activates only when the tested firmware and layout guards match.
+Check those guards before the use of a different SEC2 resource set.
+Do not assume that the existing adapter applies to a new donor.
+
+The firmware images and signatures remain original NVIDIA data.
+These changes load resources through the driver.
+They do not require a VBIOS flash.
+
+3.3 Why other Pascal cards can work
+
+Pascal identifies an architecture family.
+It does not identify one common firmware startup configuration.
+The GTX 1080 uses GP104.
+The GTX 1080 Ti uses GP102.
+The GT 1030 uses GP108.
+
+XP 368.81 already registers GP104 and GP102 family implementations.
+It also contains Pascal graphics and compiler machinery.
+The standard patches connect and correct those existing paths.
+The INF entry selects the driver for a card.
+The display patches enable missing Pascal display-object allocation paths.
+GP102 also needs the documented firmware and host-interface repairs.
+
+The recorded standard resource combination is:
+
+  ACR: 376.84    VPR: 378.78    SEC2: 376.84
+
+GTX 1080 Ti rendering passed the recorded tests.
+P4000 operation was also recorded; the P4000 uses GP104.
+Those results do not establish a separate test of every Pascal model.
+GP107 still has reported Code 10 failures.
+
+GP108 has a different starting condition.
+XP recognizes its chip ID, but it does not register a GP108 family implementation.
+The standalone prototype supplies that registration and selected graphics resources.
+The standard builder does not apply that prototype.
+Its current GT 1030 INF entry selects the driver without those additions.
+That configuration is the recorded p1 experiment.
+
+The 382.33 donor selects different ACR objects for GP104 and GP108.
+GP108 shares its ACR object with GP102, GP106, and GP107 in that donor.
+Thus GP104 can use a different resource-selection path from GP108.
+The p3 prototype selects the GP106 ACR object for GP108.
+It also selects the 382.33 ACR set.
+That change removes the earlier failure, but startup still returns 0x0b.
+
+The current p3 resource combination is:
+
+  ACR and graphics resources: 382.33
+  SEC2 resources:             376.84
+  VPR resources:              byte-identical to 382.33
+
+The SEC2 resource combination is the leading suspect.
+Its compatibility with the selected ACR and loading structures is not yet proven.
+Different release numbers alone do not prove an incompatible combination.
+The working standard package also uses resources from different releases.
+The exact GP108 requirement that causes 0x0b remains unknown.
+Other callback differences can still require changes after firmware startup succeeds.
+
+3.4 Evidence for the initialization explanation
+
+The recorded XP behavior is in NOTES.md, under GP108 prototypes p2/p3 and BAR0 tracing.
+The chip tables and ACR object selections are in DECOMP_NOTES.md.
+The standard firmware combination and host adapter are in REBUILDING.md, section 5.
+The adapter's guards and field translation are in sources/sec2-bootdesc.S.
+
+The Linux reference also shows SEC2 commands that start FECS and GPCCS.
+It loads a SEC2 image, descriptor, and signature set.
+This reference explains the mechanism; it does not prove the XP runtime result.
+Linux v6.12 reference:
+https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/engine/sec2/gp102.c
+https://github.com/torvalds/linux/blob/v6.12/drivers/gpu/drm/nouveau/nvkm/subdev/acr/gp102.c
 
 4. Backport method
 
@@ -156,7 +304,7 @@ Purpose: test the leading explanation for the p3 failure.
 3. Identify the complete SEC2 payload, descriptor, and signature set.
 4. Compare the set with the current 376.84 SEC2 resources.
 5. Compare the donor's loading parameters with the XP loading parameters.
-6. Verify the existing 76-byte to 84-byte descriptor adaptation.
+6. Verify the existing 56-byte to 84-byte descriptor adaptation and its activation guards.
 7. Verify WPR header fields, alignment, and resource placement against the donor behavior.
 8. Check compatibility among ACR, SEC2, FECS, and GPCCS resources.
 9. Record every extracted resource hash.
