@@ -9,7 +9,7 @@
 # GP107 block. Like gp107.s, every address is EIP-relative or rel32, so no new
 # PE relocations are required.
 #
-# Mapping (GeForce 382.33 x86 -> XP 368.81), see NOTES.md:
+# Mapping (GeForce 382.33 x86 -> XP 368.81), see docs/gp108/DECOMP_NOTES.md:
 #   382.33 registers GP108 as family 0x3D, derived from GP107 (0x3C). XP's keys
 #   are one lower (GP107 = 0x3B), so GP108 = 0x3C.
 #   382.33 GP108 overrides GP107 in 19 of 82 slots. Only the firmware-bearing

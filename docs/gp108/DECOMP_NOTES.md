@@ -69,7 +69,7 @@ The **12 real differences**:
 | 25 GPCCS | `0x7cce8a` (GP104 + `+0x28`) | `0x7cd070` (base `0x7cc7fa`) | signature getter `+0x20` → `0xb9c5f8`; nulls `+0x24` | Mirrored |
 | 29 GR | `0x7ced84` (GP104 + `+0x428`) | `0x7cf19a` (GP107 + override) | bundle getter `+0x420` → `0xa9fdec`; nulls `+0x428` | Mirrored (XP `+0x3e0`) |
 | 4 | `0x7db9e0` → method `+0x04` = `0x86de06` | `0x7dbbb2` | `+0x04` = `0x2f4628` (plain base) | Bus init (PBUS `0x1538`/`0x1558`). GP107's method adds a Quadro P400 (`0x1cb3`) quirk; GP108 drops it. XP's GP106-derived table has no such quirk. |
-| 5 | `0x7cc7d4` (table `0xbafaa8`) | `0x7cc8c0` (table `0xbaed00` via `0x7cc074`) | `+0x7c` = `0x347ef8` | `0x347ef8` writes `0x10402c = 0x77777732`, `0x104034 = 0xb0a`. Memory-subsystem settings; must be understood before mirroring. |
+| 5 | `0x7cc7d4` (thunk to base `0x7cc074`) | `0x7cc8c0` (same base `0x7cc074`) | `+0x7c` = `0x347ef8` | `0x347ef8` writes `0x10402c = 0x77777732`, `0x104034 = 0xb0a`. Memory-subsystem settings; must be understood before mirroring. |
 | 6 | `0x7d15d0` (thunk to `0x7d0cb4`) | `0x7d1aa0` | `+0x0c` = `0x7e16ca` | Sets capability bytes `+0x74 = 0x01010101`, `+0x78 = 1` |
 | 8 | `0x7df568` | `0x7df6dc` | `+0x400` = `0x7e18c8` | Capability-byte setter (`+0x6f8..+0x720`) |
 | 15 | `0x7cd1c0` | `0x7cd27c` | `+0x24` = `0x86e60e`, `+0x57c` = `0x86e69e`, `+0x588` = `0x7e3216` | `0x7e3216` is a capability-byte setter (`+0x732..+0x7b1`); the other two select per-config paths |
@@ -83,51 +83,6 @@ To do for a complete port: name each engine (5, 6, 8, 15, 27, 50, 53, 55), compa
 Slot 0 (ACR) is **identical** for GP107 and GP108 in 382.33: both use the GP102/GP106 object `0x7df9fe`.
 
 **GR bundle `0xa9fdec`** (87603 B) vs GP107 `0xaf5c5c`: equal except FECS/GPCCS microcode (types 0-3) and type 18 (`5` vs `7`). The 376.84 and 382.33 GP107 bundles differ only in types 0-3.
-
-## Secure boot (ACR), slot 0
-
-382.33 ACR object tables (getter field → descriptor):
-
-| Field | GP102/106/107/108 table `0xbce090` | GP104/GP10B table `0xbceff0` |
-|---|---|---|
-| `+0x64` ACR image | `0xb16cec` 16640 B | `0xb16cec` 16640 B |
-| `+0x68` (alt image) | - | `0xb1875c` 15616 B (= 376.84 `0x698b34`) |
-| `+0x6c` ACR header | `0xb187c8` 36 B | same, plus alt `+0x70` |
-| `+0x74`, `+0x7c` | 16 B signatures `0xb189a4`, `0xb18a54` | same, plus alts |
-| `+0x84`, `+0x8c` | 4 B values `0xb18af8`, `0xb18b4c` | same, plus alts |
-| `+0x94..+0xa8` | second ucode set (13568 B `0xb1a298` + headers) | same |
-| `+0xc4..`, `+0xf4..`, `+0x13c..`, `+0x16c..`, `+0x184..` | further ucode sets (2816, 6144, 3072, 3584, 3584 B) | same, with alternates |
-
-Non-getter methods of `0xbce090` (fields `+0x00..+0x48`): `0x31ed0c, 0x1c7114, 0x31ec00, 0x31e94e, 0x31ed9c, 0x294844, 0x31e13e, 0x31debe, 0x31dc1a, 0x31e3a2, 0x31e302, 0x31ead0, 0x31ea46, 0x31e4e4, 0x31dbde, 0x31db8e, 0x31e448, 0x31eb90, 0x7dc5e4`.
-
-- `0x31e4e4`: runs an HS ucode on the **PMU** (mailbox `0x10a040`, poisoned with `0xdeadbeef` first) and stores the result in registry value **`RMPsdlCertStatus`**. This is the PSDL certificate path, not the SEC2 ACR boot.
-- `0x31ed9c`: allocates and fills a 256-byte-aligned buffer from a ucode descriptor (fields `[0],[1],[2],[3],[5],[6]` → load parameters), then calls `[falcon+0x3c4]` to execute it. A generic HS-ucode loader.
-
-XP: ACR 0-5 descriptors at `0xc33f90 + 0x18*i`, getters `0x4d3e10..0x4d3eb0`, referenced from tables `.rdata 0x8ad348` and `0x8ad4e8`. SEC2 image/descriptor/signature getters `0x4ea830/0x4ea850/0x4ea880` → descriptors `0xc35118/0xc35130/0xc35154`.
-
-## Runtime cross-check (from the BAR0 trace, see NOTES.md)
-
-| Build | SEC2 result |
-|---|---|
-| ACR 376.84 (upstream) | halts immediately, MAILBOX0 `0x23` |
-| ACR 382.33 set | runs about 57 polls, MAILBOX0 `0x0b` |
-
-## Public ACR status codes (nvgpu)
-
-NVIDIA's open-source Tegra driver **nvgpu** (MIT licensed; mirror `github.com/OE4T/linux-nvgpu`, commit `21d928824dc7`, `drivers/gpu/nvgpu/common/acr/acr_priv.h`) lists the status codes the ACR firmware returns in MAILBOX0:
-
-| Code | Name |
-|---|---|
-| `0x0B` | `ACR_ERROR_LS_SIG_VERIF_FAIL`: signature verification of an LS (light-secure) falcon image failed |
-| `0x1B` | `ACR_ERROR_REG_ACCESS_FAILURE` |
-| `0x66` | `ACR_ERROR_WDT` (watchdog) |
-| `0x84` | `ACR_ERROR_RISCV_EXCEPTION` (RISC-V ACR only) |
-
-`acr_bootstrap.c` reads **MAILBOX1** on failure to get the falcon ID of the image that failed. IDs from `include/nvgpu/falcon.h`: PMU 0, GSPLITE 1, FECS 2, GPCCS 3, NVDEC 4, SEC2 7, MINION 10, PMU_NEXT_CORE 13.
-
-Caveats: nvgpu documents these alongside its newer (GSP/RISC-V) ACR. The ACR codebase is shared across generations and `0x0B` fits our observation, but the mapping for the 2017 desktop Pascal ACR is not independently confirmed. `0x23` is not listed in nvgpu; upstream's reading (fused minimum version not met) comes from their disassembly of the ACR (REBUILDING.md §5.1).
-
-**Applied to GP108 p3:** MAILBOX0 `0x0B` means the 382.33 ACR passed its own checks and then **rejected the signature of one of the LS images** in the WPR. The XP driver reads and clears only MAILBOX0 and never reads MAILBOX1 (`0x87044`; no access in either trace), so which image failed (FECS, GPCCS, SEC2 or PMU) is not yet known. This fits the mixed-release hypothesis: the SEC2 LS image and signature are from 376.84 while the ACR is from 382.33.
 
 ## Status (2026-10-05)
 

@@ -8,8 +8,11 @@ GP108 PIECES - INDEX
 1.3 The text follows an ASD-STE100 style: short sentences, active voice,
     and one instruction in each sentence. It has not had a full
     ASD-STE100 dictionary review.
-1.4 Detailed analysis is in ../../NOTES.md and ../../DECOMP_NOTES.md.
-1.5 The task sequence is in ../../PLAN.txt.
+1.4 Test results are in NOTES.md. Static analysis is in DECOMP_NOTES.md.
+1.5 The task sequence is in PLAN.txt.
+1.6 The piece files are in the pieces/ folder.
+1.7 NOTES.md, DECOMP_NOTES.md, and PLAN.txt are in this folder. Other
+    paths in these documents start at the repository root.
 
 2. TERMS
 
@@ -32,7 +35,7 @@ GP108 PIECES - INDEX
    SCOPE-STOP  Further internal analysis of this piece was stopped on
                purpose. See each file and DECOMP_NOTES.md.
 
-4. PIECE FILES
+4. PIECE FILES (in pieces/)
 
    File                Piece                                   Status
    INF.txt             Device match and install section        DONE
@@ -46,7 +49,7 @@ GP108 PIECES - INDEX
    BOOTDESC.txt        SEC2 boot descriptor adapter            PARTIAL
    VPR.txt             Video protected region resources        DONE
    CAPABILITY-SLOTS.txt  Remaining GP108 table differences     OPEN
-   GPU-NAMES.txt       Internal name records for compute       OPEN
+   GPU-NAMES.txt       Internal name records for compute       DONE
    BUILD.txt           Reproducible build integration          OPEN
 
 5. READING ORDER

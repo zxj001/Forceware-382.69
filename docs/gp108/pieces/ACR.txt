@@ -58,6 +58,8 @@ Status: SCOPE-STOP
 
 8. REFERENCES
 
-8.1 DECOMP_NOTES.md, sections "Secure boot (ACR), slot 0" and
-    "Public ACR status codes (nvgpu)".
-8.2 REBUILDING.md, section 5, for the standard firmware repair.
+8.1 NOTES.md, section "GP108 prototypes p2/p3 and BAR0 tracing".
+8.2 DECOMP_NOTES.md, status section.
+8.3 nvgpu (github.com/OE4T/linux-nvgpu),
+    drivers/gpu/nvgpu/common/acr/acr_priv.h, for the status codes.
+8.4 REBUILDING.md, section 5, for the standard firmware repair.

@@ -520,6 +520,8 @@ For each candidate, record:
 
 8. Source files
 
+NOTES.md and DECOMP_NOTES.md are in docs/gp108/. Other paths start at the repository root.
+
 - NOTES.md (NOTES.md): test environment, prototype results, and recorded status.
 - DECOMP_NOTES.md (DECOMP_NOTES.md): constructor mappings and remaining differences.
 - patch_gp108.py (sources/gp108/patch_gp108.py): current standalone prototype patcher.
@@ -530,5 +532,3 @@ For each candidate, record:
 - patches.json (patches.json): input hashes, resource records, and binary patch records.
 - verify_sources.py (verify_sources.py): independent source and binary verification.
 
-The final Next section in NOTES.md predates the documented p2 and p3 results.
-Use the later status sections and this plan for the current work sequence.

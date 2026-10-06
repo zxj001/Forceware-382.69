@@ -46,5 +46,5 @@ Status: PARTIAL
 
 7. REFERENCES
 
-7.1 DECOMP_NOTES.md, sections "GP108 vs GP107 in 382.33" and "GR bundle".
+7.1 DECOMP_NOTES.md, section "GP108 vs GP107 in 382.33".
 7.2 sources/gp107/gp107.s for the GP107 reference layout.
