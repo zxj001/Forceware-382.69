@@ -1,0 +1,9 @@
+SECTIONS { . = 0xd68f00; .text : { *(.text*) } /DISCARD/ : { *(.note*) *(.comment*) *(.eh_frame*) } }
+register_family = 0x511780;
+original_gp106_table = 0xb7b410;
+original_gp104_fecs = 0x4f0600;
+original_gp104_gpccs = 0x4f0770;
+null_getter = 0x850130;
+register_gp107 = 0xd07c40;
+gp107_gr = 0xd07d5a;
+family_table = 0xd07eb0;
